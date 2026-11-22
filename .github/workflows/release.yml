@@ -4,7 +4,6 @@ name: Release skill zip
 on:
   push:
     tags: ["v*"]
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -18,9 +17,13 @@ jobs:
         run: |
           cd skills
           zip -r ../lenmu-video.zip lenmu-video -x '*/__pycache__/*' '*.pyc' '*.onnx'
-      - name: Publish release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: lenmu-video.zip
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'latest' }}
-          generate_release_notes: true
+      - name: Publish release (gh CLI, no third-party action)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" lenmu-video.zip --clobber
+          else
+            gh release create "$TAG" lenmu-video.zip --generate-notes
+          fi
