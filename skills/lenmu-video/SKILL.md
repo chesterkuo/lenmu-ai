@@ -10,6 +10,8 @@ description: 用 Lenmu MCP 做 AI 影片（短片、廣告、MV、對嘴、短�
 
 **總原則：把錯誤擋在花錢之前。** 文字裡能發現的錯，不留到圖上；圖上能發現的錯，不留到影片上。
 
+本文提到的 `scripts/…` 都在**這個 skill 資料夾**裡（和這份 SKILL.md 同一層），不在使用者的專案資料夾。執行時用 skill 資料夾的完整路徑，例如 `python3 <skill 資料夾>/scripts/framecheck.py …`，輸出寫進專案資料夾。
+
 ---
 
 ## 0. 分工
@@ -81,7 +83,7 @@ description: 用 Lenmu MCP 做 AI 影片（短片、廣告、MV、對嘴、短�
 
 先把使用者的一句話或初步劇情寫成完整故事。不清楚的地方就問，一起聊，使用者確認了才往下寫。
 
-**結構首選「片段式」**：每個鏡頭各自成立、鏡頭之間不用接戲，最穩。「連貫式」最容易穿幫，使用者要求才用。
+**結構首選「片段式」**：每個鏡頭各自成立、鏡頭之間不用接戲，最穩。「連貫式」最容易穿幫，使用者要求才用。互動劇和多集短劇另有跨集、跨分支的規則，見第 18 節。
 
 展開成逐鏡頭的故事時，要滿足：
 1. **一句話說清楚想表達什麼。** 先寫出這句話；說不出來就表示故事還要改。
@@ -277,8 +279,7 @@ description: 用 Lenmu MCP 做 AI 影片（短片、廣告、MV、對嘴、短�
 |---|---|
 | 多鏡頭、想讓使用者在 Lenmu 劇本節點接手 | `write_script`（shots＋cards＋style）→ `expand_script` stage `cards` → `images` →（首幀檢查、審核）→ `videos` → `assemble_film`。這條路的影片只鎖首幀（分鏡圖），沒有尾幀 |
 | 說話、唱歌、對嘴 | `generate_audio`（voice 或 music）→ 使用者聽過 → `generate_video` 用 OmniHuman 2.0（一張圖＋一條音訊） |
-| 多集短劇、互動劇 | `write_story` → `write_episode` → `split_episode` → `apply_cast_review` → `expand_script` → `assemble_film` → `publish_play` |
-| 已有每集成片，要組互動劇 | `create_story`（免費）→ `publish_play` 帶 films |
+| 多集短劇、互動劇 | 見第 18 節（Lenmu 寫劇本，或先拍成片再組） |
 | 修已經生好的片 | `trim_video`、`capture_frame`（免費）、`reshoot_video`、`continue_video` |
 
 ---
@@ -309,7 +310,7 @@ description: 用 Lenmu MCP 做 AI 影片（短片、廣告、MV、對嘴、短�
 ## 13. 剪接與後製
 
 ### 13.1 在 Lenmu 剪（免費、使用者可接手）
-`assemble_film`：1–20 段、最長 300 秒；每段 `in_ms`／`out_ms`、`speed`、`transition_out`；音樂、旁白、音效（含音樂旁白合計最多 8 個不同音檔）；字卡 `texts`；字幕（自己寫 cues，或 `from_narration: true`＋`script`）；`output` 選比例和 720／1080。成片是畫布上的 film 節點，可再帶 `film_node_id` 修改。要進 Premiere／Final Cut 用 `export_premiere`。
+`assemble_film`：1–20 段、最長 300 秒；每段 `in_ms`／`out_ms`、`speed`、`transition_out`；音樂、旁白、音效（含音樂旁白合計最多 8 個不同音檔）；字卡 `texts`；字幕（自己寫 cues，或 `from_narration: true`＋`script`）；`output` 選比例和 720／1080。成片是畫布上的 film 節點，可再帶 `film_node_id` 修改。要進 Premiere／Final Cut 用 `export_premiere`。用程式修好的片，要先 `create_upload_url` 上傳、再 `add_media_to_canvas` 放上畫布，才能剪進 `assemble_film`；`out_ms` 不能超過片長，先看 `duration_ms`。
 
 ### 13.2 用程式後製（沙盒能下載 Lenmu 檔案時）
 1. **色彩空間**：先 `ffprobe` 看 `color_space`。實測 Lenmu 下載的 Seedance mp4 是 24fps、色彩標記全部 unknown。原作者的經驗是要**按 BT.601 解碼**；我們拿 Lenmu 的三支片，把第一格分別用 BT.601、BT.709 解碼，再和首幀圖比對，差距都不到 1 個色階，分不出來。所以每個專案先做一次同樣的比對（`scale=in_color_matrix=bt601` 和 `bt709` 各解一格，跟首幀圖算平均誤差），取誤差小的；分不出來就用 BT.601。中間檔一律無損（PNG 序列或 FFV1）；交付時轉成並標記 **BT.709**：
@@ -392,7 +393,80 @@ description: 用 Lenmu MCP 做 AI 影片（短片、廣告、MV、對嘴、短�
 
 ---
 
-## 18. 內容界線
+## 18. 互動劇與系列
+
+互動劇是一部有分支的長劇：中途出題，觀眾選了選項就走不同分支；分支可以合併回主線，也可以各自結束；選擇會改變變數，後面的分流看累積的狀態。
+
+### 18.1 Lenmu 的模型
+- 一部劇＝一張故事圖，3–16 個節點。**每個節點就是一集，要有一支成片。**
+- 節點種類：
+  - `choice`：這集最後一格出題，2–3 個選項；每個選項可以改變數（`set`），並指到下一集；倒數結束會自動選 `default`。
+  - `next`：播完直接接某一集。
+  - `auto`：依變數分流（`rules: [{if: [變數, 比較, 數值], next}]`＋`else`），通常做成 1–2 秒的過場片。
+  - `ending`：結局，帶一個結局名稱。
+- 限制：選擇點最多 5 個；結局 2–4 個；變數最多 4 個，每個選項加減 3 以內；不能有迴圈（選錯不能回到題目重選）；每一集都要能到達，每條路都要走到結局。
+- **合併**：兩條分支的 `next` 指到同一集就是合併。
+- **狀態**：變數在整部劇裡一路帶著，合併後也還在。
+
+```
+1 開場（結尾問 Q1）
+ ├ A → 2 分支 A（勇氣 +1）┐
+ └ B → 3 分支 B（信任 +1）┘→ 4 合併主線（結尾問 Q2）
+                               ├ A → 5（勇氣 +1）┐
+                               └ B → 6（信任 +1）┘→ 7 自動判斷（1–2 秒過場）
+                                                     ├ 勇氣 ≥ 2 → 8 結局甲
+                                                     ├ 信任 ≥ 2 → 9 結局乙
+                                                     └ 其他     → 10 結局丙
+```
+
+### 18.2 故事設計規則（使用者確認故事圖前不畫圖）
+1. **先給使用者看故事圖**：每集的編號、種類、題目與選項、每個選項改哪個變數、自動判斷的門檻、每個結局的名稱。
+2. **合併後的那一集對所有人播同一支片**，內容不能提只有某條分支才發生的事。要因狀態不同而不同，就拆成不同集，再用 `auto` 導過去。
+3. **選項要讓人真的想選**：每個選項都說得通，結果有差。有正確答案的題目（推理、解謎）用變數記分數，結尾再用 `auto` 依分數分流。
+4. **題目要在一格畫面裡讀得懂**：題目卡用 `assemble_film` 的 caption 樣式，720p 下每行約 11 個中文字以內，自己斷行；選項文字要短。
+5. **跨集連戲**：鏡頭內仍以片段式為主，但同一批角色要跨集、跨分支一致。連戲表要涵蓋所有分支；合併集開頭的狀態（服裝、道具、傷痕、天色）要和每一條進來的分支都對得上。
+6. **報價照節點數算**：每個節點一支成片，包括 `auto` 過場和每個結局。先列「節點 → 鏡頭數 → 金額」表給使用者。
+7. **超過 16 集或 5 個選擇點**：拆成好幾部，放進同一個系列（18.5）。
+
+### 18.3 兩條製作路線
+**A. 讓 Lenmu 寫劇本（從零開始）**
+1. 可選：`list_script_presets` 挑爆款預設；`ask_story_questions` 把導演的 2–3 個問題給使用者回答。
+2. `write_story` 帶 `interactive: {choices, endings}`（Lenmu 自己規劃 3–16 集，不要同時給 `episodes`）。
+3. `get_script`（include story）讀出故事圖給使用者確認。要改：`update_story` 改分支目標、門檻、變數或整集節點；`update_script_doc` 改文字；`rewrite_script_doc` 讓導演重寫一章。導演的修改會變成待確認的修改，**使用者決定後**才呼叫 `review_script_changes`。
+4. 每一集：`write_episode` → `split_episode` → 把 `cast_review` 給使用者看，**使用者決定後**呼叫 `apply_cast_review` → 照第 4–11 節做分鏡、首尾幀、審核、報價、生成 → `assemble_film` 剪成這一集的成片。
+   - 改了分支或題目，已寫好的集會被標成 stale，要重寫（`write_episode` 的 `overwrite` 只在使用者要求時用），再重新 `split_episode`。
+5. 發布（18.4）。
+
+**B. 先拍成片再組（已有素材，或要完全掌控）**
+1. 照前面的流程把每個節點的成片做好：每集用 `assemble_film` 剪成 film 節點，題目卡、結局卡用 `texts` 加上。
+2. `create_story` 手寫故事圖（免費）：`story: {v: 1, start, vars, nodes}`，`episodes` 給每集標題，`films` 對應每集的 film node_id（會檢查成片是否已匯出）。
+   - `start` 和 `next` 要填**數字**，填成字串 `"1"` 會被拒絕（bad_start）。
+   - 檢查沒過會回 `problems[]`（到不了的集、迴圈、沒走到結局），照著改。
+3. `publish_play` 時帶同一份 `films` 對照表。
+
+一張畫布可以放好幾部互動劇，`get_canvas` 的 `scripts[]` 列出每部的 script_node_id。
+
+### 18.4 發布與更新
+- `publish_play` 第一次呼叫一定回同意聲明，**原文給使用者看，同意才送**。選項：
+  - `visibility`：public（列在社群展示區）或 unlisted（只有拿到連結的人能看）；放進系列的劇不能設 unlisted。
+  - `map_mode`：fog（沒看過的集顯示問號，預設）、visited（只顯示看過的）、all（整張圖）。
+  - `allow_embed`：允許其他網站嵌入。
+  - 自動對應成片失敗（film_ambiguous）時，照錯誤訊息用 `films` 補上每集的 film node_id。
+- 發布後用 `play_status` 看每集的渲染進度；上線後還看得到觀看數、完成數、各結局人數、各選項票數，以及觀眾在哪一集離開。
+- **改了任何東西（成片、故事圖、題目）都要重新 `publish_play` 才會上線**，網址不變。
+- 下架用 `unpublish_play`，要使用者確認。
+
+### 18.5 系列
+- 長劇拆成好幾部時用系列串起來：`create_series`（標題、作者、封面圖）→ `add_episode`（綁已發布的劇的 publication_id，或先開「即將上架」的空位）→ `publish_series`（同意聲明原文給使用者看）。
+- 系列有共用的分數變數（`vars`，最多 4 個，發布後只能新增）。狀態能不能從上一部帶到下一部，以 Lenmu 當下的實作為準；不確定就先問使用者，或在每一部開頭重新設定。
+- 片頭、結尾字卡不要寫「第 X 集」：系列的集數和劇裡的集數會打架，用集名就好。
+
+### 18.6 從畫布素材重新剪接時
+- 修過的片（裁頭尾、挖掉中間一段、補拍）要照原本的剪接點重組。直接拿畫布上的原始片從頭剪到尾，修好的錯會回來。原本的參數不見了，用 `export_premiere` 找回那支成片的時間軸。
+
+---
+
+## 19. 內容界線
 
 - 不生成真實人物（名人、政治人物、使用者沒有授權的人）的長相或聲音。眼嘴微馬賽克（第 8 節）只用在 AI 生成的虛構人物。
 - 不做知名角色、品牌 Logo、商標造型、受版權保護的作品重現。

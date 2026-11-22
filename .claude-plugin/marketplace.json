@@ -3,7 +3,7 @@
   "owner": { "name": "Plusblocks Technology Limited" },
   "metadata": {
     "description": "Lenmu MCP skills for AI video production.",
-    "version": "1.0.0"
+    "version": "1.1.0"
   },
   "plugins": [
     {

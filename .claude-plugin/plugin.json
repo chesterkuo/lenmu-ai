@@ -1,7 +1,7 @@
 {
   "name": "lenmu-video",
   "description": "Lenmu MCP 總導演：從故事、分鏡、配色、首尾幀、審核、生成到程式後製一路把關。",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": { "name": "Plusblocks Technology Limited" },
   "homepage": "https://github.com/chesterkuo/lenmu-ai",
   "repository": "https://github.com/chesterkuo/lenmu-ai",
