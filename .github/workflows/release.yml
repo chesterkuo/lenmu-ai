@@ -1,0 +1,26 @@
+# Push a tag like v1.0.0 to build lenmu-video.zip and attach it to a GitHub Release.
+name: Release skill zip
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build zip (skill folder at zip root)
+        run: |
+          cd skills
+          zip -r ../lenmu-video.zip lenmu-video -x '*/__pycache__/*' '*.pyc' '*.onnx'
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: lenmu-video.zip
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'latest' }}
+          generate_release_notes: true

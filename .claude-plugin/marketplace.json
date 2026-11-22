@@ -1,0 +1,15 @@
+{
+  "name": "lenmu-skills",
+  "owner": { "name": "Plusblocks Technology Limited" },
+  "metadata": {
+    "description": "Lenmu MCP skills for AI video production.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "lenmu-video",
+      "source": "./",
+      "description": "Lenmu MCP 總導演：從故事、分鏡、配色、首尾幀、審核、生成到程式後製一路把關。"
+    }
+  ]
+}
